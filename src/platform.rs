@@ -1,5 +1,8 @@
 use serde::Deserialize;
 use std::process::Command;
+use std::fs;
+use std::path::Path;
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 struct SystemProfilerReport {
@@ -39,13 +42,44 @@ struct Volume {
     name: String,
     file_system: String,
     volume_uuid: String,
+    #[serde(default)]
+    mount_point: String,
+}
+
+fn get_or_create_uuid(volume: &Volume) -> String {
+    if volume.volume_uuid != "00000000-0000-0000-0000-000000000000" {
+        return volume.volume_uuid.clone();
+    }
+
+    if volume.mount_point.is_empty() {
+        return volume.volume_uuid.clone(); // Cannot create UUID file without a mount point
+    }
+
+    let uuid_file_path = Path::new(&volume.mount_point).join(".crystory_uuid");
+
+    if let Ok(uuid_str) = fs::read_to_string(&uuid_file_path) {
+        if let Ok(_) = Uuid::parse_str(&uuid_str) {
+            return uuid_str;
+        }
+    }
+
+    let new_uuid = Uuid::new_v4().to_string();
+    if fs::write(&uuid_file_path, &new_uuid).is_ok() {
+        // On macOS, we need to make the file hidden.
+        Command::new("chflags")
+            .arg("hidden")
+            .arg(&uuid_file_path)
+            .status()
+            .ok();
+        return new_uuid;
+    }
+
+    volume.volume_uuid.clone()
 }
 
 fn process_usb_item(item: &USBItem) {
-    // Check if the current item is a storage device by looking for the "Media" key.
     if !item.media.is_empty() {
         println!("Device: {}", item.name);
-        // Use the serial_num from the parent item if available.
         if !item.serial_num.is_empty() {
             println!("  Serial Number: {}", item.serial_num);
         }
@@ -56,22 +90,23 @@ fn process_usb_item(item: &USBItem) {
 
             if media.volumes.len() == 1 {
                 if let Some(volume) = media.volumes.first() {
+                    let uuid = get_or_create_uuid(volume);
                     println!("  File System: {}", volume.file_system);
-                    println!("  Volume UUID: {}", volume.volume_uuid);
+                    println!("  Volume UUID: {}", uuid);
                 }
             } else {
                 for (i, volume) in media.volumes.iter().enumerate() {
+                    let uuid = get_or_create_uuid(volume);
                     println!("  - Partition {}:", i + 1);
                     println!("      Name: {}", volume.name);
                     println!("      File System: {}", volume.file_system);
-                    println!("      Volume UUID: {}", volume.volume_uuid);
+                    println!("      Volume UUID: {}", uuid);
                 }
             }
         }
         println!("--------------------------------------------------");
     }
 
-    // Recursively process any sub-items (for hubs or nested devices).
     for sub_item in &item.sub_items {
         process_usb_item(sub_item);
     }

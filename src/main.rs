@@ -1,3 +1,5 @@
+mod platform;
+
 fn main() {
-    println!("Hello, world!");
+    platform::list_usb_devices();
 }

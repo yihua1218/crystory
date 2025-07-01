@@ -1,4 +1,4 @@
-mod platform;
+mod scanner;
 
 use clap::{Parser, Subcommand};
 
@@ -14,8 +14,8 @@ struct Cli {
 enum Commands {
     /// List all connected USB storage devices
     ListDevices,
-    /// Scan a new device (Not yet implemented)
-    Scan,
+    /// Scan a new device
+    Scan { path: String },
     /// Query a previously indexed device (Not yet implemented)
     Query,
     /// Manage the background indexer service (Not yet implemented)
@@ -27,10 +27,10 @@ fn main() {
 
     match &cli.command {
         Commands::ListDevices => {
-            platform::list_usb_devices();
+            scanner::list_storage_devices();
         }
-        Commands::Scan => {
-            println!("'scan' is not yet implemented.");
+        Commands::Scan { path } => {
+            scanner::scan_directory(path);
         }
         Commands::Query => {
             println!("'query' is not yet implemented.");
